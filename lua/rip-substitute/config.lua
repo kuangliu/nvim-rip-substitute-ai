@@ -46,6 +46,12 @@ local defaultConfig = {
 		matchHlGroup = "IncSearch",
 		rangeBackdropBrightness = 50, ---@type number|false 0-100, false disables backdrop
 	},
+	aiRegex = {
+		enabled = true,
+		baseUrl = "https://api.deepseek.com",
+		model = "deepseek-v4-flash",
+		apiKey = "", -- set via config or DEEPSEEK_API_KEY env var
+	},
 	regexOptions = {
 		startWithFixedStrings = false,
 		startWithIgnoreCase = false,

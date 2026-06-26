@@ -80,23 +80,6 @@ local function closePopupWin()
 	vim.api.nvim_buf_clear_namespace(state.targetBuf, ns, 0, -1)
 end
 
----@param where "cwd"|"buffer"
-local function confirmSubstitution(where)
-	local state = require("rip-substitute.state").state
-	local rg = require("rip-substitute.rg-operations")
-
-	-- block confirmation if no matches
-	-- (matchCount is also set to `0` when search or replace string is invalid)
-	if state.matchCount == 0 then return end
-
-	local replaceFunc = where == "buffer" and rg.substituteInBuffer or rg.substituteInCwd
-	replaceFunc(function()
-		saveHistory()
-		closePopupWin()
-		vim.cmd.stopinsert()
-	end)
-end
-
 local function updateMatchCount()
 	local state = require("rip-substitute.state").state
 	local config = require("rip-substitute.config").config
@@ -111,7 +94,91 @@ local function updateMatchCount()
 	local matchHighlight = state.matchCount > 0 and matchHlGroup or noMatchHlGroup
 	table.insert(footer, 1, { matchText, matchHighlight })
 
+	-- Dynamically update the confirm hint when AI regex is enabled
+	if config.aiRegex.enabled and #footer > 1 then
+		-- Footer[7] is the desc label for the confirm keymap (" confirm" or " AI-convert")
+		footer[7][1] = state.aiConverted and " confirm" or " AI-convert"
+	end
+
 	vim.api.nvim_win_set_config(state.popupWinNr, { footer = footer })
+end
+
+local function setPopupTitle()
+	local state = require("rip-substitute.state").state
+	local config = require("rip-substitute.config").config
+
+	local title = config.popupWin.title
+	if state.useIgnoreCase and state.useFixedStrings then
+		title = "--fixed-strings --ignore-case"
+	elseif state.useIgnoreCase then
+		title = title .. " --ignore-case"
+	elseif state.useFixedStrings then
+		title = title .. " --fixed-string"
+	elseif state.range then
+		title = "range: " .. state.range.start
+		if state.range.start ~= state.range.end_ then title = title .. "–" .. state.range.end_ end
+	end
+
+	if title ~= "" then title = " " .. vim.trim(title) .. " " end
+	vim.api.nvim_win_set_config(state.popupWinNr, { title = title })
+end
+
+---@param where "cwd"|"buffer"
+---@param skipAi? boolean when true, skip AI conversion even if enabled
+local function confirmSubstitution(where, skipAi)
+	local state = require("rip-substitute.state").state
+	local config = require("rip-substitute.config").config
+	local rg = require("rip-substitute.rg-operations")
+
+	-- Stage 1: AI conversion (natural language -> regex)
+	if config.aiRegex.enabled and not skipAi and not state.aiConverted then
+		-- Guard: empty input
+		local searchLine = getPopupLines()[1]
+		if vim.trim(searchLine) == "" then return end
+
+		-- Guard: prevent concurrent AI calls
+		if state.aiLoading then return end
+		state.aiLoading = true
+
+		-- Show loading state in footer
+		local footer = assert(vim.api.nvim_win_get_config(state.popupWinNr).footer, "no footer")
+		footer[1] = { " Asking AI... ", config.popupWin.matchCountHlGroup }
+		vim.api.nvim_win_set_config(state.popupWinNr, { footer = footer })
+
+		require("rip-substitute.ai-regex").convertToRegex(searchLine, function(regex, errmsg)
+			state.aiLoading = false
+			if not regex then
+				u.notify("AI conversion failed: " .. (errmsg or "Unknown error"), "error")
+				footer[1] = { " 0 matches ", config.popupWin.matchCountHlGroup }
+				vim.api.nvim_win_set_config(state.popupWinNr, { footer = footer })
+				return
+			end
+
+			state.aiSettingRegex = true -- suppress aiConverted reset in TextChanged
+			vim.api.nvim_buf_set_lines(state.popupBufNr, 0, 1, false, { regex })
+			state.aiConverted = true
+			setPopupTitle()
+
+			require("rip-substitute.rg-operations").incrementalPreviewAndMatchCount()
+			updateMatchCount()
+
+			u.notify("Converted to regex. Press Enter again to substitute.")
+		end)
+		return
+	end
+
+	-- Stage 2: Normal substitution
+	-- block confirmation if no matches
+	-- (matchCount is also set to `0` when search or replace string is invalid)
+	if state.matchCount == 0 then return end
+
+	local replaceFunc = where == "buffer" and rg.substituteInBuffer or rg.substituteInCwd
+	replaceFunc(function()
+		state.aiConverted = false -- reset for next popup session
+		saveHistory()
+		closePopupWin()
+		vim.cmd.stopinsert()
+	end)
 end
 
 local function autoCaptureGroups()
@@ -223,26 +290,6 @@ local function rangeBackdrop(popupZindex)
 	end
 end
 
-local function setPopupTitle()
-	local state = require("rip-substitute.state").state
-	local config = require("rip-substitute.config").config
-
-	local title = config.popupWin.title
-	if state.useIgnoreCase and state.useFixedStrings then
-		title = "--fixed-strings --ignore-case"
-	elseif state.useIgnoreCase then
-		title = title .. " --ignore-case"
-	elseif state.useFixedStrings then
-		title = title .. " --fixed-string"
-	elseif state.range then
-		title = "range: " .. state.range.start
-		if state.range.start ~= state.range.end_ then title = title .. "–" .. state.range.end_ end
-	end
-
-	if title ~= "" then title = " " .. vim.trim(title) .. " " end
-	vim.api.nvim_win_set_config(state.popupWinNr, { title = title })
-end
-
 local function createKeymaps()
 	local state = require("rip-substitute.state").state
 	local maps = require("rip-substitute.config").config.keymaps
@@ -254,7 +301,9 @@ local function createKeymaps()
 	keymap("n", maps.abort, closePopupWin)
 	keymap("n", maps.confirmAndSubstituteInBuffer, function() confirmSubstitution("buffer") end)
 	-- stylua: ignore
-	keymap("i", maps.insertModeConfirmAndSubstituteInBuffer, function() confirmSubstitution("buffer") end)
+	keymap("i", "<CR>", function() confirmSubstitution("buffer") end)
+	-- stylua: ignore
+	keymap("i", maps.insertModeConfirmAndSubstituteInBuffer, function() confirmSubstitution("buffer", true) end)
 	keymap("n", maps.confirmAndSubstituteInCwd, function() confirmSubstitution("cwd") end)
 
 	-- regex101
@@ -335,6 +384,11 @@ function M.openSubstitutionPopup()
 	local state = require("rip-substitute.state").state
 	local config = require("rip-substitute.config").config
 
+	-- Reset AI conversion state for new popup session
+	state.aiConverted = false
+	state.aiLoading = false
+	state.aiSettingRegex = false
+
 	-- CREATE BUFFER
 	local bufnr = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, state.prefill)
@@ -411,6 +465,12 @@ function M.openSubstitutionPopup()
 		buffer = state.popupBufNr,
 		group = vim.api.nvim_create_augroup("rip-substitute-popup-changes", {}),
 		callback = function()
+			local state = require("rip-substitute.state").state
+			if state.aiSettingRegex then
+				state.aiSettingRegex = false
+			else
+				state.aiConverted = false -- reset on user edit
+			end
 			ensureOnly2LinesInPopup()
 			autoCaptureGroups()
 			adaptivePopupWidth(minWidth)

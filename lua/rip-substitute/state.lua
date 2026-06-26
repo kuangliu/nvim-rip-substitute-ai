@@ -18,6 +18,9 @@ local M = {}
 ---@field historyPosition? number
 ---@field prefill? [string, string]
 ---@field rememberedPrefill? string
+---@field aiConverted? boolean tracks if current search input has been AI-converted
+---@field aiLoading? boolean prevents duplicate AI API calls
+---@field aiSettingRegex? boolean set when AI callback replaces search line, to suppress TextChanged reset
 
 ---@type RipSubstitute.State
 M.state = {
@@ -25,6 +28,9 @@ M.state = {
 	matchCount = 0,
 	useFixedStrings = false,
 	useIgnoreCase = false,
+	aiConverted = false,
+	aiLoading = false,
+	aiSettingRegex = false,
 }
 
 ---@type string
