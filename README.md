@@ -2,6 +2,14 @@
 <a href="https://dotfyle.com/plugins/chrisgrieser/nvim-rip-substitute">
 <img alt="badge" src="https://dotfyle.com/plugins/chrisgrieser/nvim-rip-substitute/shield"/></a>
 
+> **AI-powered regex** — describe matches in natural language (e.g. "all email
+> addresses") and let an LLM write the regex for you. Press `Tab` to toggle
+> between AI and direct regex mode.
+>
+> **Visual selection** — select text in visual mode, open the popup, and use
+> `Tab` to switch between editing it as a regex pattern or describing it to the
+> AI. The selection is shown in the footer as context.
+
 Search and replace in the current buffer or workspace with incremental preview,
 a convenient UI, and modern regex syntax.
 
@@ -24,6 +32,13 @@ A substitute for Vim's `:substitute` using `ripgrep`.
 <!-- tocstop -->
 
 ## Features
+- **AI-powered regex**: Describe what you want to match in natural language
+  (e.g. "all email addresses") and have it converted to a regex via an LLM.
+  Toggle between AI and direct regex mode with `Tab`.
+- **Visual selection preview**: When opened from visual mode, the selected text
+  is displayed in the footer. `Tab` toggles between using the selection as a
+  regex pattern or clearing the field to type a natural language query, with
+  the selection shown as context.
 - Search and replace in the current buffer or workspace using
   [ripgrep](https://github.com/BurntSushi/ripgrep).
 - **Common regex syntax**: no more dealing with arcane vim regex.
