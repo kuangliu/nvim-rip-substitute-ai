@@ -413,7 +413,16 @@ function M.openSubstitutionPopup()
 	local footer = {
 		{ " xxx matches ", config.popupWin.noMatchHlGroup },
 	}
-	if not config.popupWin.hideKeymapHints then
+	if state.visualSelection then
+		local truncated = #state.visualSelection > 30 and state.visualSelection:sub(1, 27) .. "…"
+			or state.visualSelection
+		vim.list_extend(footer, {
+			{ " select: " },
+			{ truncated, "CursorLine" },
+			{ " " },
+		})
+	end
+	if not config.popupWin.hideKeymapHints and not state.visualSelection then
 		vim.list_extend(footer, {
 			{ " normal: " },
 			{ maps.showHelp:gsub("[<>]", ""), hlgroup.key },

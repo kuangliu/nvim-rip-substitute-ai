@@ -31,12 +31,20 @@ function M.convertToRegex(naturalLanguage, callback)
 		return
 	end
 
+	-- Build user message with optional visual context
+	local state = require("rip-substitute.state").state
+	local userMessage = naturalLanguage
+	if state.visualLine then
+		userMessage = ("Given the full line: %q\nGenerate a regex that matches the selected substring: %q\nUser request: %s"):format(
+			state.visualLine, state.visualSelection or "", naturalLanguage)
+	end
+
 	-- Build request body
 	local body = {
 		model = config.model,
 		messages = {
 			{ role = "system", content = SYSTEM_PROMPT },
-			{ role = "user", content = naturalLanguage },
+			{ role = "user", content = userMessage },
 		},
 		max_tokens = 500,
 		temperature = 0,

@@ -26,7 +26,8 @@ function M.setParameters(exCmdArgs)
 			u.notify(msg, "warn")
 			return
 		end
-		searchPrefill = selectedLines[1]
+		state.visualSelection = selectedLines[1]
+		state.visualLine = vim.fn.getline(".")
 	end
 	local replacePrefill = config.prefill.alsoPrefillReplaceLine and searchPrefill or ""
 	-- escape

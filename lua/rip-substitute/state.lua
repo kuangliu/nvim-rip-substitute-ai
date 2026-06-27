@@ -18,6 +18,8 @@ local M = {}
 ---@field historyPosition? number
 ---@field prefill? [string, string]
 ---@field rememberedPrefill? string
+---@field visualSelection? string text selected in visual mode, shown in footer
+---@field visualLine? string the full line containing the visual selection (AI context)
 ---@field aiMode? boolean Tab-toggleable: true = AI convert on Enter, false = direct substitute
 ---@field aiLoading? boolean prevents duplicate AI API calls
 

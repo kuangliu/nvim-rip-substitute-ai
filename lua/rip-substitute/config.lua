@@ -25,7 +25,7 @@ local defaultConfig = {
 		disableCompletions = true, -- such as from blink.cmp
 	},
 	prefill = {
-		normal = "cursorWord", ---@type "cursorWord"|false
+		normal = false, ---@type "cursorWord"|false
 		visual = "selection", ---@type "selection"|false -- (not with ex-command, see README)
 		startInReplaceLineIfPrefill = false,
 		alsoPrefillReplaceLine = false,
