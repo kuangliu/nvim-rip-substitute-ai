@@ -304,6 +304,41 @@ local function createKeymaps()
 	if config.aiRegex.enabled then
 		keymap({ "n", "i" }, maps.toggleAiMode, function()
 			state.aiMode = not state.aiMode
+			if state.visualSelection then
+				local footer = vim.deepcopy(assert(vim.api.nvim_win_get_config(state.popupWinNr).footer, "no footer"))
+				-- drop everything after match count, rebuild
+				for _ = 2, #footer do table.remove(footer) end
+				if state.aiMode then
+					-- AI ON: clear search field, show selection in footer
+					vim.api.nvim_buf_set_lines(state.popupBufNr, 0, -1, false, { "", getPopupLines()[2] })
+					local truncated = #state.visualSelection > 30 and state.visualSelection:sub(1, 27) .. "…"
+						or state.visualSelection
+					vim.list_extend(footer, {
+						{ " select: " },
+						{ truncated, "CursorLine" },
+						{ " " },
+					})
+				else
+					-- AI OFF: put selection in search field, show keymap hints
+					local replacePrefill = config.prefill.alsoPrefillReplaceLine and state.visualSelection or ""
+					vim.api.nvim_buf_set_lines(state.popupBufNr, 0, -1, false, { state.visualSelection, replacePrefill })
+					if not config.popupWin.hideKeymapHints then
+						vim.list_extend(footer, {
+							{ " normal: " },
+							{ maps.showHelp:gsub("[<>]", ""), "Comment" },
+							{ " help", "NonText" },
+							{ " " },
+							{ maps.confirmAndSubstituteInBuffer:gsub("[<>]", ""), "Comment" },
+							{ " confirm", "NonText" },
+							{ " " },
+							{ maps.abort:gsub("[<>]", ""), "Comment" },
+							{ " abort", "NonText" },
+							{ " " },
+						})
+					end
+				end
+				vim.api.nvim_win_set_config(state.popupWinNr, { footer = footer })
+			end
 			setPopupTitle()
 			updateMatchCount()
 		end)
