@@ -305,12 +305,11 @@ local function createKeymaps()
 		keymap({ "n", "i" }, maps.toggleAiMode, function()
 			state.aiMode = not state.aiMode
 			if state.visualSelection then
-				local footer = vim.deepcopy(assert(vim.api.nvim_win_get_config(state.popupWinNr).footer, "no footer"))
-				-- drop everything after match count, rebuild
-				for _ = 2, #footer do table.remove(footer) end
 				if state.aiMode then
 					-- AI ON: clear search field, show selection in footer
 					vim.api.nvim_buf_set_lines(state.popupBufNr, 0, -1, false, { "", getPopupLines()[2] })
+					local footer = vim.deepcopy(assert(vim.api.nvim_win_get_config(state.popupWinNr).footer, "no footer"))
+					for _ = 2, #footer do table.remove(footer) end
 					local truncated = #state.visualSelection > 30 and state.visualSelection:sub(1, 27) .. "…"
 						or state.visualSelection
 					vim.list_extend(footer, {
@@ -318,26 +317,15 @@ local function createKeymaps()
 						{ truncated, "CursorLine" },
 						{ " " },
 					})
+					vim.api.nvim_win_set_config(state.popupWinNr, { footer = footer })
 				else
-					-- AI OFF: put selection in search field, show keymap hints
+					-- AI OFF: put selection in search field, clear footer hint
 					local replacePrefill = config.prefill.alsoPrefillReplaceLine and state.visualSelection or ""
 					vim.api.nvim_buf_set_lines(state.popupBufNr, 0, -1, false, { state.visualSelection, replacePrefill })
-					if not config.popupWin.hideKeymapHints then
-						vim.list_extend(footer, {
-							{ " normal: " },
-							{ maps.showHelp:gsub("[<>]", ""), "Comment" },
-							{ " help", "NonText" },
-							{ " " },
-							{ maps.confirmAndSubstituteInBuffer:gsub("[<>]", ""), "Comment" },
-							{ " confirm", "NonText" },
-							{ " " },
-							{ maps.abort:gsub("[<>]", ""), "Comment" },
-							{ " abort", "NonText" },
-							{ " " },
-						})
-					end
+					local footer = vim.deepcopy(assert(vim.api.nvim_win_get_config(state.popupWinNr).footer, "no footer"))
+					for _ = 2, #footer do table.remove(footer) end
+					vim.api.nvim_win_set_config(state.popupWinNr, { footer = footer })
 				end
-				vim.api.nvim_win_set_config(state.popupWinNr, { footer = footer })
 			end
 			setPopupTitle()
 			updateMatchCount()
@@ -443,8 +431,6 @@ function M.openSubstitutionPopup()
 	if config.popupWin.disableCompletions then vim.b[bufnr].completion = false end
 
 	-- FOOTER & WIDTH
-	local maps = require("rip-substitute.config").config.keymaps
-	local hlgroup = { key = "Comment", desc = "NonText" }
 	local footer = {
 		{ " xxx matches ", config.popupWin.noMatchHlGroup },
 	}
@@ -454,20 +440,6 @@ function M.openSubstitutionPopup()
 		vim.list_extend(footer, {
 			{ " select: " },
 			{ truncated, "CursorLine" },
-			{ " " },
-		})
-	end
-	if not config.popupWin.hideKeymapHints and not state.visualSelection then
-		vim.list_extend(footer, {
-			{ " normal: " },
-			{ maps.showHelp:gsub("[<>]", ""), hlgroup.key },
-			{ " help", hlgroup.desc },
-			{ " " },
-			{ maps.confirmAndSubstituteInBuffer:gsub("[<>]", ""), hlgroup.key },
-			{ " confirm", hlgroup.desc },
-			{ " " },
-			{ maps.abort:gsub("[<>]", ""), hlgroup.key },
-			{ " abort", hlgroup.desc },
 			{ " " },
 		})
 	end
