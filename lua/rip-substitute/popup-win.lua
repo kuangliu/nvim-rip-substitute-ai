@@ -94,12 +94,6 @@ local function updateMatchCount()
 	local matchHighlight = state.matchCount > 0 and matchHlGroup or noMatchHlGroup
 	table.insert(footer, 1, { matchText, matchHighlight })
 
-	-- Dynamically update the confirm hint when AI regex is enabled
-	if config.aiRegex.enabled and #footer > 1 then
-		-- Footer[7] is the desc label for the confirm keymap (" confirm" or " AI-convert")
-		footer[7][1] = state.aiConverted and " confirm" or " AI-convert"
-	end
-
 	vim.api.nvim_win_set_config(state.popupWinNr, { footer = footer })
 end
 
@@ -119,28 +113,33 @@ local function setPopupTitle()
 		if state.range.start ~= state.range.end_ then title = title .. "–" .. state.range.end_ end
 	end
 
-	if title ~= "" then title = " " .. vim.trim(title) .. " " end
+	if config.aiRegex.enabled then
+		title = {
+			{ " [AI:" },
+			{ state.aiMode and "ON" or "OFF" },
+			{ "] " },
+			{ "Tab to switch", "Comment" },
+			{ " " },
+		}
+	elseif title ~= "" then
+		title = " " .. vim.trim(title) .. " "
+	end
 	vim.api.nvim_win_set_config(state.popupWinNr, { title = title })
 end
 
 ---@param where "cwd"|"buffer"
----@param skipAi? boolean when true, skip AI conversion even if enabled
-local function confirmSubstitution(where, skipAi)
+local function confirmSubstitution(where)
 	local state = require("rip-substitute.state").state
 	local config = require("rip-substitute.config").config
 	local rg = require("rip-substitute.rg-operations")
 
-	-- Stage 1: AI conversion (natural language -> regex)
-	if config.aiRegex.enabled and not skipAi and not state.aiConverted then
-		-- Guard: empty input
+	-- AI mode: convert natural language to regex
+	if config.aiRegex.enabled and state.aiMode then
 		local searchLine = getPopupLines()[1]
 		if vim.trim(searchLine) == "" then return end
-
-		-- Guard: prevent concurrent AI calls
 		if state.aiLoading then return end
 		state.aiLoading = true
 
-		-- Show loading state in footer
 		local footer = assert(vim.api.nvim_win_get_config(state.popupWinNr).footer, "no footer")
 		footer[1] = { " Asking AI... ", config.popupWin.matchCountHlGroup }
 		vim.api.nvim_win_set_config(state.popupWinNr, { footer = footer })
@@ -154,27 +153,21 @@ local function confirmSubstitution(where, skipAi)
 				return
 			end
 
-			state.aiSettingRegex = true -- suppress aiConverted reset in TextChanged
 			vim.api.nvim_buf_set_lines(state.popupBufNr, 0, 1, false, { regex })
-			state.aiConverted = true
+			state.aiMode = false -- switch to regex mode after conversion
 			setPopupTitle()
-
 			require("rip-substitute.rg-operations").incrementalPreviewAndMatchCount()
 			updateMatchCount()
-
-			u.notify("Converted to regex. Press Enter again to substitute.")
+			u.notify("Converted to regex. Press Enter to substitute.")
 		end)
 		return
 	end
 
-	-- Stage 2: Normal substitution
-	-- block confirmation if no matches
-	-- (matchCount is also set to `0` when search or replace string is invalid)
+	-- Regex mode: normal substitution
 	if state.matchCount == 0 then return end
 
 	local replaceFunc = where == "buffer" and rg.substituteInBuffer or rg.substituteInCwd
 	replaceFunc(function()
-		state.aiConverted = false -- reset for next popup session
 		saveHistory()
 		closePopupWin()
 		vim.cmd.stopinsert()
@@ -292,7 +285,8 @@ end
 
 local function createKeymaps()
 	local state = require("rip-substitute.state").state
-	local maps = require("rip-substitute.config").config.keymaps
+	local config = require("rip-substitute.config").config
+	local maps = config.keymaps
 	local function keymap(modes, lhs, rhs)
 		vim.keymap.set(modes, lhs, rhs, { buffer = state.popupBufNr, nowait = true })
 	end
@@ -303,8 +297,17 @@ local function createKeymaps()
 	-- stylua: ignore
 	keymap("i", "<CR>", function() confirmSubstitution("buffer") end)
 	-- stylua: ignore
-	keymap("i", maps.insertModeConfirmAndSubstituteInBuffer, function() confirmSubstitution("buffer", true) end)
+	keymap("i", maps.insertModeConfirmAndSubstituteInBuffer, function() confirmSubstitution("buffer") end)
 	keymap("n", maps.confirmAndSubstituteInCwd, function() confirmSubstitution("cwd") end)
+
+	-- AI mode toggle
+	if config.aiRegex.enabled then
+		keymap({ "n", "i" }, maps.toggleAiMode, function()
+			state.aiMode = not state.aiMode
+			setPopupTitle()
+			updateMatchCount()
+		end)
+	end
 
 	-- regex101
 	-- stylua: ignore
@@ -357,9 +360,14 @@ local function createKeymaps()
 			("- [%s] toggle `--ignore-case`"):format(maps.toggleIgnoreCase),
 			("- [%s] open at regex101"):format(maps.openAtRegex101),
 			("- [%s] show help"):format(maps.showHelp),
+		}
+		if config.aiRegex.enabled then
+			table.insert(info, ("- [%s] toggle AI/regex mode"):format(maps.toggleAiMode))
+		end
+		vim.list_extend(info, {
 			"",
 			"All mappings apply to normal mode (if not stated otherwise).",
-		}
+		})
 		u.notify(table.concat(info, "\n"), "info", { id = "rip-substitute-help", timeout = 10000 })
 	end)
 end
@@ -384,10 +392,9 @@ function M.openSubstitutionPopup()
 	local state = require("rip-substitute.state").state
 	local config = require("rip-substitute.config").config
 
-	-- Reset AI conversion state for new popup session
-	state.aiConverted = false
+	-- Reset AI state for new popup session
+	state.aiMode = true -- AI mode on by default
 	state.aiLoading = false
-	state.aiSettingRegex = false
 
 	-- CREATE BUFFER
 	local bufnr = vim.api.nvim_create_buf(false, true)
@@ -465,12 +472,6 @@ function M.openSubstitutionPopup()
 		buffer = state.popupBufNr,
 		group = vim.api.nvim_create_augroup("rip-substitute-popup-changes", {}),
 		callback = function()
-			local state = require("rip-substitute.state").state
-			if state.aiSettingRegex then
-				state.aiSettingRegex = false
-			else
-				state.aiConverted = false -- reset on user edit
-			end
 			ensureOnly2LinesInPopup()
 			autoCaptureGroups()
 			adaptivePopupWidth(minWidth)

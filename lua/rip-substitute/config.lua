@@ -39,6 +39,7 @@ local defaultConfig = {
 		nextSubstitutionInHistory = "<Down>",
 		toggleFixedStrings = "<C-f>", -- ripgrep's `--fixed-strings`
 		toggleIgnoreCase = "<C-c>", -- ripgrep's `--ignore-case`
+		toggleAiMode = "<Tab>",
 		openAtRegex101 = "R",
 		showHelp = "?",
 	},
