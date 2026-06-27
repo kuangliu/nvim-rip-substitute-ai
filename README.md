@@ -1,4 +1,4 @@
-# nvim-rip-substitute 🪦 <!-- rumdl-disable-line MD063 -->
+# nvim-rip-substitute-ai 🪦 <!-- rumdl-disable-line MD063 -->
 <a href="https://dotfyle.com/plugins/chrisgrieser/nvim-rip-substitute">
 <img alt="badge" src="https://dotfyle.com/plugins/chrisgrieser/nvim-rip-substitute/shield"/></a>
 
@@ -21,6 +21,7 @@ A substitute for Vim's `:substitute` using `ripgrep`.
 
 <!-- toc -->
 
+- [AI mode](#ai-mode)
 - [Features](#features)
 - [Installation](#installation)
 - [Configuration](#configuration)
@@ -30,6 +31,40 @@ A substitute for Vim's `:substitute` using `ripgrep`.
 - [About the developer](#about-the-developer)
 
 <!-- tocstop -->
+
+## AI mode
+
+This fork adds AI-powered natural-language-to-regex conversion. Instead of
+writing regex patterns by hand, describe what you want to match and an LLM
+generates the regex for you.
+
+**Workflow**
+
+1. Open the popup — it starts in AI mode (`[AI:ON]` in the title).
+2. Type a natural language description (e.g. `email addresses`, `strings in double quotes`).
+3. Press `<CR>` — the text is sent to the LLM API and replaced with the generated regex.
+4. Review the incremental preview, then press `<CR>` again to execute the substitution.
+
+Press `<Tab>` (configurable via `keymaps.toggleAiMode`) to switch between AI
+and direct regex mode at any time.
+
+**Configuration**
+
+```lua
+require("rip-substitute").setup {
+    aiRegex = {
+        enabled = true,                              -- enable AI mode
+        baseUrl = "https://api.deepseek.com",        -- OpenAI-compatible endpoint
+        model = "deepseek-v4-pro",                   -- model name
+        apiKey = "sk-...",                           -- your API key
+    },
+    keymaps = {
+        toggleAiMode = "<Tab>",                      -- toggle AI/direct mode
+    },
+}
+```
+
+Any OpenAI-compatible API works — OpenAI, DeepSeek, Ollama, etc. Set `aiRegex.enabled = false` to disable the feature entirely.
 
 ## Features
 - **AI-powered regex**: Describe what you want to match in natural language
