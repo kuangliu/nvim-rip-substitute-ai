@@ -93,9 +93,16 @@ $1baz
 ```lua
 -- lazy.nvim
 {
-	"chrisgrieser/nvim-rip-substitute",
+	"kuangliu/nvim-rip-substitute-ai",
 	cmd = "RipSubstitute",
-	opts = {},
+	opts = {
+		aiRegex = {
+			enabled = true,
+			baseUrl = "https://api.deepseek.com", -- any OpenAI-compatible endpoint
+			model = "deepseek-v4-pro",
+			apiKey = "sk-...", -- your API key
+		},
+	},
 	keys = {
 		{
 			"<leader>rs",
@@ -108,7 +115,7 @@ $1baz
 
 -- packer
 use {
-	"chrisgrieser/nvim-rip-substitute",
+	"kuangliu/nvim-rip-substitute-ai",
 	config = function() 
 		require("rip-substitute").setup()
 
